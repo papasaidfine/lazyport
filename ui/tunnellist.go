@@ -128,62 +128,46 @@ func (t TunnelList) Update(msg tea.Msg) (TunnelList, tea.Cmd) {
 	return t, nil
 }
 
-var (
-	tunnelsPaneStyle = lipgloss.NewStyle().
-				Border(lipgloss.RoundedBorder()).
-				BorderForeground(colorBorder).
-				Padding(0, 1)
-	tunnelsPaneFocusStyle = tunnelsPaneStyle.
-				BorderForeground(colorBorderFocused)
-
-	tunnelsTitleStyle = lipgloss.NewStyle().
-				Foreground(colorTitle).
-				Bold(true)
-
-	tableHeaderStyle = lipgloss.NewStyle().
-				Foreground(colorTextMuted).
-				Underline(true)
-
-	tunnelRowStyle = lipgloss.NewStyle().Foreground(colorText)
-
-	tunnelRowSelectedStyle = lipgloss.NewStyle().
-				Foreground(colorTextSelected).
-				Background(colorBgSelected).
-				Bold(true)
-
-	statusActiveStyle = lipgloss.NewStyle().Foreground(colorStatusActive)
-	statusDownStyle   = lipgloss.NewStyle().Foreground(colorStatusDown)
-	statusPausedStyle = lipgloss.NewStyle().Foreground(colorStatusPaused)
-
-	delHintStyle = lipgloss.NewStyle().Foreground(colorTextMuted)
-
-	hintStyle = lipgloss.NewStyle().Foreground(colorTextMuted)
-)
-
 func (t TunnelList) View() string {
-	borderColor := colorBorder
+	th := ActiveTheme
+
+	paneStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(th.Border).
+		Padding(0, 1)
 	if t.AnyFocused() {
-		borderColor = colorBorderFocused
+		paneStyle = paneStyle.BorderForeground(th.BorderFocused)
+	}
+	titleStyle := lipgloss.NewStyle().Foreground(th.Title).Bold(true)
+	tableHeaderStyle := lipgloss.NewStyle().Foreground(th.TextMuted).Underline(true)
+	rowStyle := lipgloss.NewStyle().Foreground(th.Text)
+	rowSelectedStyle := lipgloss.NewStyle().
+		Foreground(th.TextSelected).
+		Background(th.BgSelected).
+		Bold(true)
+	statusActiveStyle := lipgloss.NewStyle().Foreground(th.StatusActive)
+	statusDownStyle := lipgloss.NewStyle().Foreground(th.StatusDown)
+	statusPausedStyle := lipgloss.NewStyle().Foreground(th.StatusPaused)
+	mutedStyle := lipgloss.NewStyle().Foreground(th.TextMuted)
+	borderColor := th.Border
+	if t.AnyFocused() {
+		borderColor = th.BorderFocused
 	}
 	borderStyle := lipgloss.NewStyle().Foreground(borderColor)
 
-	style := tunnelsPaneStyle
-	if t.AnyFocused() {
-		style = tunnelsPaneFocusStyle
-	}
 	// Height in lipgloss is content rows; borders are added on top. We render
 	// 1 manual top + N content + 1 bottom = N + 2 = t.height rows.
-	style = style.BorderTop(false).Width(t.width).Height(t.height - 2)
+	style := paneStyle.BorderTop(false).Width(t.width).Height(t.height - 2)
 
 	title := "Tunnels"
 	if t.hostAlias != "" {
 		title = "Tunnels: " + t.hostAlias
 	}
-	header := titleBorder(t.width, title, tunnelsTitleStyle, borderStyle)
+	header := titleBorder(t.width, title, titleStyle, borderStyle)
 
 	var b strings.Builder
 	if t.hostAlias == "" {
-		b.WriteString(hintStyle.Render("Pick a host on the left, press Enter to connect."))
+		b.WriteString(mutedStyle.Render("Pick a host on the left, press Enter to connect."))
 		return header + "\n" + style.Render(b.String())
 	}
 
@@ -192,7 +176,7 @@ func (t TunnelList) View() string {
 	b.WriteByte('\n')
 
 	if len(t.items) == 0 {
-		b.WriteString(hintStyle.Render("(no forwards yet — type a port below)"))
+		b.WriteString(mutedStyle.Render("(no forwards yet — type a port below)"))
 		b.WriteByte('\n')
 	} else {
 		for i, it := range t.items {
@@ -206,11 +190,11 @@ func (t TunnelList) View() string {
 				status = statusDownStyle.Render("down  ")
 			}
 			row := fmt.Sprintf("%-7d %s   %s",
-				it.Port, status, delHintStyle.Render("[del]"))
+				it.Port, status, mutedStyle.Render("[del]"))
 			if i == t.cursor && t.focusedList {
-				row = tunnelRowSelectedStyle.Render(row)
+				row = rowSelectedStyle.Render(row)
 			} else {
-				row = tunnelRowStyle.Render(row)
+				row = rowStyle.Render(row)
 			}
 			b.WriteString(row)
 			b.WriteByte('\n')
@@ -224,7 +208,7 @@ func (t TunnelList) View() string {
 
 	if t.focusedList && len(t.items) > 0 {
 		b.WriteString("\n")
-		b.WriteString(hintStyle.Render("space  pause/resume    d / x  delete    Tab  switch pane"))
+		b.WriteString(mutedStyle.Render("space  pause/resume    d / x  delete    Tab  switch pane"))
 	}
 
 	return header + "\n" + style.Render(b.String())

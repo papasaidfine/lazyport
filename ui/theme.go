@@ -1,64 +1,98 @@
 package ui
 
-import "github.com/charmbracelet/lipgloss"
+import (
+	"fmt"
+	"sort"
+	"strings"
+
+	"github.com/charmbracelet/lipgloss"
+)
+
+// Theme is the bag of colors lazyport's UI reads at render time.
+//
+// Styles are intentionally NOT cached in package-level vars: the active
+// theme can change between View() calls (CLI flag at startup, or — should we
+// add it later — a hot-key), and lipgloss styles are cheap enough to build
+// inline in each render path.
+type Theme struct {
+	Name string
+
+	Border        lipgloss.Color // muted pane border
+	BorderFocused lipgloss.Color // pane border when the pane has focus
+	Title         lipgloss.Color // header text baked into the top border
+
+	Text         lipgloss.Color // primary body text
+	TextMuted    lipgloss.Color // hints, table headers, faded UI chrome
+	TextSelected lipgloss.Color // foreground of the selected row
+	BgSelected   lipgloss.Color // background of the selected row
+
+	StatusActive lipgloss.Color // green — running forward / connected dot
+	StatusDown   lipgloss.Color // red   — error / unexpectedly down
+	StatusPaused lipgloss.Color // yellow — user-paused forward
+}
 
 // Nord — https://www.nordtheme.com/
-//
-// Lipgloss downgrades these to the nearest 256-color palette match on
-// terminals that don't support truecolor, so the look degrades gracefully on
-// legacy cmd.exe / older ConHost.
-var (
-	// Polar Night — backgrounds and muted UI chrome.
-	nord0 = lipgloss.Color("#2E3440")
-	nord1 = lipgloss.Color("#3B4252")
-	nord2 = lipgloss.Color("#434C5E")
-	nord3 = lipgloss.Color("#4C566A")
+var Nord = Theme{
+	Name:          "nord",
+	Border:        lipgloss.Color("#4C566A"),
+	BorderFocused: lipgloss.Color("#88C0D0"),
+	Title:         lipgloss.Color("#88C0D0"),
+	Text:          lipgloss.Color("#D8DEE9"),
+	TextMuted:     lipgloss.Color("#4C566A"),
+	TextSelected:  lipgloss.Color("#ECEFF4"),
+	BgSelected:    lipgloss.Color("#5E81AC"),
+	StatusActive:  lipgloss.Color("#A3BE8C"),
+	StatusDown:    lipgloss.Color("#BF616A"),
+	StatusPaused:  lipgloss.Color("#EBCB8B"),
+}
 
-	// Snow Storm — foreground / regular text.
-	nord4 = lipgloss.Color("#D8DEE9")
-	nord5 = lipgloss.Color("#E5E9F0")
-	nord6 = lipgloss.Color("#ECEFF4")
+// Dracula — https://draculatheme.com/
+var Dracula = Theme{
+	Name:          "dracula",
+	Border:        lipgloss.Color("#6272A4"),
+	BorderFocused: lipgloss.Color("#BD93F9"),
+	Title:         lipgloss.Color("#FF79C6"),
+	Text:          lipgloss.Color("#F8F8F2"),
+	TextMuted:     lipgloss.Color("#6272A4"),
+	TextSelected:  lipgloss.Color("#F8F8F2"),
+	BgSelected:    lipgloss.Color("#44475A"),
+	StatusActive:  lipgloss.Color("#50FA7B"),
+	StatusDown:    lipgloss.Color("#FF5555"),
+	StatusPaused:  lipgloss.Color("#F1FA8C"),
+}
 
-	// Frost — primary accents (focus, titles, "current" state).
-	nord7  = lipgloss.Color("#8FBCBB")
-	nord8  = lipgloss.Color("#88C0D0")
-	nord9  = lipgloss.Color("#81A1C1")
-	nord10 = lipgloss.Color("#5E81AC")
+// Themes is the registry surfaced to the CLI for --theme.
+var Themes = map[string]Theme{
+	"nord":    Nord,
+	"dracula": Dracula,
+}
 
-	// Aurora — semantic colors.
-	nord11 = lipgloss.Color("#BF616A") // red — error / down
-	nord12 = lipgloss.Color("#D08770") // orange — warning (unused)
-	nord13 = lipgloss.Color("#EBCB8B") // yellow — paused / hold
-	nord14 = lipgloss.Color("#A3BE8C") // green — active / success
-	nord15 = lipgloss.Color("#B48EAD") // purple — special (unused)
-)
+// ActiveTheme is the live palette that View() functions read on each render.
+// Default is Nord.
+var ActiveTheme = Nord
 
-// Project-level semantic aliases. Tweaking the look-and-feel of lazyport
-// should mostly happen here, not at every call site. Exported entries are
-// used from the main package (status bar, quit modal).
-var (
-	colorBorder        = nord3
-	colorBorderFocused = nord8
-	colorTitle         = nord8
-	colorText          = nord4
-	colorTextMuted     = nord3
-	colorTextSelected  = nord6
-	colorBgSelected    = nord10
+// SetTheme switches the active palette by name. An empty name is a no-op
+// (callers can pass an unset env var directly without checking).
+func SetTheme(name string) error {
+	if name == "" {
+		return nil
+	}
+	t, ok := Themes[strings.ToLower(name)]
+	if !ok {
+		return fmt.Errorf("unknown theme %q (available: %s)",
+			name, strings.Join(ThemeNames(), ", "))
+	}
+	ActiveTheme = t
+	return nil
+}
 
-	colorStatusActive = nord14
-	colorStatusDown   = nord11
-	colorStatusPaused = nord13
-)
-
-// Exported names for use from the main package.
-var (
-	ColorBorderFocused = colorBorderFocused
-	ColorTextMuted     = colorTextMuted
-	ColorStatusActive  = colorStatusActive
-	ColorStatusDown    = colorStatusDown
-)
-
-// Suppress "declared but unused" complaints for the unused palette entries —
-// we keep them around so future additions can pull the right shade without
-// re-deriving it from the website.
-var _ = []lipgloss.Color{nord0, nord1, nord2, nord5, nord7, nord9, nord12, nord15}
+// ThemeNames returns the registered theme names in stable order — useful for
+// CLI help text and error messages.
+func ThemeNames() []string {
+	names := make([]string, 0, len(Themes))
+	for n := range Themes {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	return names
+}

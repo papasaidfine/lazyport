@@ -88,27 +88,22 @@ func (p PortInput) Update(msg tea.Msg) (PortInput, tea.Cmd) {
 	return p, cmd
 }
 
-var (
-	portLabelStyle = lipgloss.NewStyle().Foreground(colorTextMuted)
-	portBoxStyle   = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(colorBorder).
-			Padding(0, 1)
-	portBoxFocusStyle = portBoxStyle.
-				BorderForeground(colorBorderFocused)
-)
-
 func (p PortInput) View() string {
-	box := portBoxStyle
+	t := ActiveTheme
+	label := lipgloss.NewStyle().Foreground(t.TextMuted)
+	box := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(t.Border).
+		Padding(0, 1)
 	if p.focused {
-		box = portBoxFocusStyle
+		box = box.BorderForeground(t.BorderFocused)
 	}
 	// The "press Enter to forward" hint used to live on this line, but it
 	// overflowed past SetWidth's budget and bled into the box. The bottom
 	// help bar already shows `enter forward · esc back` when this pane has
 	// focus, so the inline hint was redundant.
 	return lipgloss.JoinHorizontal(lipgloss.Center,
-		portLabelStyle.Render("Add port: "),
+		label.Render("Add port: "),
 		box.Render(p.ti.View()),
 	)
 }

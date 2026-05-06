@@ -85,53 +85,43 @@ func (h HostList) Update(msg tea.Msg) (HostList, tea.Cmd) {
 	return h, nil
 }
 
-var (
-	hostsPaneStyle = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(colorBorder).
-			Padding(0, 1)
-	hostsPaneFocusStyle = hostsPaneStyle.
-				BorderForeground(colorBorderFocused)
-
-	hostsTitleStyle = lipgloss.NewStyle().
-			Foreground(colorTitle).
-			Bold(true)
-
-	hostRowSelectedStyle = lipgloss.NewStyle().
-				Foreground(colorTextSelected).
-				Background(colorBgSelected).
-				Bold(true)
-
-	hostRowStyle = lipgloss.NewStyle().
-			Foreground(colorText)
-
-	hostMutedStyle = lipgloss.NewStyle().
-			Foreground(colorTextMuted)
-)
-
+// Styles are built per-render from ActiveTheme so a theme switch (CLI flag,
+// or — should we add it later — a hot-key) is reflected immediately. lipgloss
+// styles are cheap structs; allocating ~6 of them per frame is fine.
 func (h HostList) View() string {
-	borderColor := colorBorder
+	t := ActiveTheme
+	paneStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(t.Border).
+		Padding(0, 1)
 	if h.focused {
-		borderColor = colorBorderFocused
+		paneStyle = paneStyle.BorderForeground(t.BorderFocused)
+	}
+	titleStyle := lipgloss.NewStyle().Foreground(t.Title).Bold(true)
+	rowSelectedStyle := lipgloss.NewStyle().
+		Foreground(t.TextSelected).
+		Background(t.BgSelected).
+		Bold(true)
+	rowStyle := lipgloss.NewStyle().Foreground(t.Text)
+	mutedStyle := lipgloss.NewStyle().Foreground(t.TextMuted)
+	borderColor := t.Border
+	if h.focused {
+		borderColor = t.BorderFocused
 	}
 	borderStyle := lipgloss.NewStyle().Foreground(borderColor)
 
 	// Render the box with no top border; we'll prepend our own title-bearing
 	// top so the title sits on the border line itself rather than below it.
-	style := hostsPaneStyle
-	if h.focused {
-		style = hostsPaneFocusStyle
-	}
 	// Height in lipgloss is content rows; borders are added on top. We render
 	// 1 manual top + N content + 1 bottom = N + 2 = h.height rows.
-	style = style.BorderTop(false).Width(h.width).Height(h.height - 2)
+	style := paneStyle.BorderTop(false).Width(h.width).Height(h.height - 2)
 
 	var b strings.Builder
 
 	if len(h.items) == 0 {
-		b.WriteString(hostMutedStyle.Render("(no hosts in ~/.ssh/config)"))
+		b.WriteString(mutedStyle.Render("(no hosts in ~/.ssh/config)"))
 		body := style.Render(b.String())
-		return titleBorder(h.width, "Hosts", hostsTitleStyle, borderStyle) + "\n" + body
+		return titleBorder(h.width, "Hosts", titleStyle, borderStyle) + "\n" + body
 	}
 
 	innerW := h.width - 4 // borders + padding
@@ -141,10 +131,10 @@ func (h HostList) View() string {
 
 	for i, it := range h.items {
 		dot := "○"
-		dotStyle := hostMutedStyle
+		dotStyle := mutedStyle
 		if it.Connected {
 			dot = "●"
-			dotStyle = lipgloss.NewStyle().Foreground(colorStatusActive)
+			dotStyle = lipgloss.NewStyle().Foreground(t.StatusActive)
 		}
 		marker := "  "
 		if i == h.cursor {
@@ -159,15 +149,15 @@ func (h HostList) View() string {
 		row := marker + padRight(name, nameW) + " " + dotStyle.Render(dot)
 
 		if i == h.cursor && h.focused {
-			row = hostRowSelectedStyle.Render(row)
+			row = rowSelectedStyle.Render(row)
 		} else {
-			row = hostRowStyle.Render(row)
+			row = rowStyle.Render(row)
 		}
 		b.WriteString(row)
 		b.WriteByte('\n')
 	}
 	body := style.Render(strings.TrimRight(b.String(), "\n"))
-	return titleBorder(h.width, "Hosts", hostsTitleStyle, borderStyle) + "\n" + body
+	return titleBorder(h.width, "Hosts", titleStyle, borderStyle) + "\n" + body
 }
 
 func padRight(s string, n int) string {

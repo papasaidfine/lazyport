@@ -53,6 +53,17 @@ lazyport
 
 That's it. Hosts come from `~/.ssh/config`.
 
+## Themes
+
+```sh
+lazyport --theme dracula        # one-shot
+LAZYPORT_THEME=dracula lazyport # via env (handy for shell rc files)
+```
+
+Built-in themes: `nord` (default, https://www.nordtheme.com/) and `dracula`
+(https://draculatheme.com/). Adding more is a one-struct addition in
+[`ui/theme.go`](ui/theme.go) — PRs welcome.
+
 ## Keys
 
 | Key                 | Action                                |

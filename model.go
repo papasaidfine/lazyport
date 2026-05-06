@@ -579,15 +579,23 @@ func (m *Model) layout() {
 	m.tunnelList.SetSize(rightW, contentH)
 }
 
-var (
-	statusOKStyle  = lipgloss.NewStyle().Foreground(ui.ColorStatusActive)
-	statusErrStyle = lipgloss.NewStyle().Foreground(ui.ColorStatusDown)
-	helpStyle      = lipgloss.NewStyle().Foreground(ui.ColorTextMuted)
-	modalStyle     = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(ui.ColorBorderFocused).
-			Padding(1, 2)
-)
+// Style helpers; built per-call against ui.ActiveTheme so a runtime theme
+// switch shows up immediately.
+func statusOKStyle() lipgloss.Style {
+	return lipgloss.NewStyle().Foreground(ui.ActiveTheme.StatusActive)
+}
+func statusErrStyle() lipgloss.Style {
+	return lipgloss.NewStyle().Foreground(ui.ActiveTheme.StatusDown)
+}
+func helpStyle() lipgloss.Style {
+	return lipgloss.NewStyle().Foreground(ui.ActiveTheme.TextMuted)
+}
+func modalStyle() lipgloss.Style {
+	return lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(ui.ActiveTheme.BorderFocused).
+		Padding(1, 2)
+}
 
 func (m Model) View() string {
 	if m.width == 0 {
@@ -599,13 +607,13 @@ func (m Model) View() string {
 			"  [k] keep them running in the background\n" +
 			"  [t] tear them all down and exit\n" +
 			"  [esc] cancel"
-		return modalStyle.Render(body)
+		return modalStyle().Render(body)
 	}
 
 	body := lipgloss.JoinHorizontal(lipgloss.Top, m.hostList.View(), " ", m.tunnelList.View())
 
 	status := m.statusLine()
-	help := helpStyle.Render(m.helpLine())
+	help := helpStyle().Render(m.helpLine())
 
 	return lipgloss.JoinVertical(lipgloss.Left, body, status, help)
 }
@@ -618,9 +626,9 @@ func (m Model) statusLine() string {
 		return " "
 	}
 	if m.statusIsErr {
-		return statusErrStyle.Render("✖ " + m.statusText)
+		return statusErrStyle().Render("✖ " + m.statusText)
 	}
-	return statusOKStyle.Render("✓ " + m.statusText)
+	return statusOKStyle().Render("✓ " + m.statusText)
 }
 
 func (m Model) helpLine() string {
