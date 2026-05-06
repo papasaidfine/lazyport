@@ -47,9 +47,8 @@ type (
 // Model is the top-level bubbletea model for lazyport.
 type Model struct {
 	hosts     []Host
-	connected map[string]bool
-	tunnels   map[string][]Tunnel // per-host tunnel list (mirror of state)
-	state     *State
+	tunnels map[string][]Tunnel // per-host tunnel list (mirror of state)
+	state   *State
 
 	hostList   ui.HostList
 	tunnelList ui.TunnelList
@@ -71,7 +70,6 @@ type Model struct {
 func NewModel(hosts []Host, state *State) Model {
 	m := Model{
 		hosts:          hosts,
-		connected:      map[string]bool{},
 		tunnels:        map[string][]Tunnel{},
 		state:          state,
 		hostList:       ui.NewHostList(),
@@ -88,20 +86,34 @@ func NewModel(hosts []Host, state *State) Model {
 	// Re-adopt forwards still alive from a previous lazyport run (the
 	// "keep tunnels running in background" path on quit). Backends decide
 	// what "still alive" means: master uses the control socket; proc verifies
-	// the persisted PID is still an ssh process.
-	for _, r := range ResumeFromState(state) {
-		m.connected[r.Alias] = true
-	}
-	for _, h := range hosts {
-		if !m.connected[h.Alias] {
-			m.connected[h.Alias] = IsConnected(h.Alias)
-		}
-	}
+	// the persisted PID is still an ssh process. Once adopted, hostActive()
+	// will see them as live and the dot lights up automatically.
+	_ = ResumeFromState(state)
 
 	m.refreshHostList()
 	m.refreshTunnelList()
 	m.hostList.Focus()
 	return m
+}
+
+// hostActive reports whether the host has any forward currently up. "Up"
+// means not user-paused AND alive at the backend level. Drives the host
+// dot, the tunnel pane title, and Enter's connect/disconnect decision.
+//
+// We deliberately don't use backend.IsConnected here: a master that's still
+// alive in the background after every forward was deleted or paused isn't
+// "active" from the user's perspective — the dot should reflect work being
+// done, not the existence of an idle SSH session.
+func (m *Model) hostActive(alias string) bool {
+	for _, t := range m.tunnels[alias] {
+		if t.Stopped {
+			continue
+		}
+		if IsForwardActive(alias, t.Port) {
+			return true
+		}
+	}
+	return false
 }
 
 func (m Model) Init() tea.Cmd {
@@ -117,7 +129,7 @@ func tickEvery() tea.Cmd {
 func (m *Model) refreshHostList() {
 	items := make([]ui.HostItem, 0, len(m.hosts))
 	for _, h := range m.hosts {
-		items = append(items, ui.HostItem{Alias: h.Alias, Connected: m.connected[h.Alias]})
+		items = append(items, ui.HostItem{Alias: h.Alias, Connected: m.hostActive(h.Alias)})
 	}
 	m.hostList.SetItems(items)
 }
@@ -129,8 +141,7 @@ func (m *Model) refreshTunnelList() {
 		m.tunnelList.SetItems(nil)
 		return
 	}
-	connected := m.connected[sel.Alias]
-	m.tunnelList.SetHost(sel.Alias, connected)
+	m.tunnelList.SetHost(sel.Alias, m.hostActive(sel.Alias))
 
 	tunnels := m.tunnels[sel.Alias]
 	items := make([]ui.TunnelItem, 0, len(tunnels))
@@ -198,19 +209,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tickMsg:
-		// Refresh ControlMaster liveness for each host.
-		changed := false
-		for _, h := range m.hosts {
-			c := IsConnected(h.Alias)
-			if c != m.connected[h.Alias] {
-				m.connected[h.Alias] = c
-				changed = true
-			}
-		}
-		if changed {
-			m.refreshHostList()
-			m.refreshTunnelList()
-		}
+		// Background processes (ssh subprocesses dying, master sockets timing
+		// out) don't surface a message — sweep periodically so the host dot
+		// reflects reality.
+		m.refreshHostList()
+		m.refreshTunnelList()
 		return m, tickEvery()
 
 	case connectedMsg:
@@ -220,7 +223,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.refreshTunnelList()
 			return m, nil
 		}
-		m.connected[msg.alias] = true
 		m.setStatus("connected to "+msg.alias, false)
 
 		// Re-establish every persisted tunnel for this host, skipping any the
@@ -249,7 +251,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.setStatus("disconnected "+msg.alias, false)
 		}
-		m.connected[msg.alias] = false
 		m.refreshHostList()
 		m.refreshTunnelList()
 		return m, nil
@@ -345,11 +346,11 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.saveState()
 			return m, tea.Quit
 		case "t", "T", "y", "Y":
-			// Tear down all masters.
+			// Tear down all masters / running subprocesses.
 			m.saveState()
 			cmds := []tea.Cmd{}
 			for _, h := range m.hosts {
-				if m.connected[h.Alias] {
+				if m.hostActive(h.Alias) {
 					alias := h.Alias
 					cmds = append(cmds, func() tea.Msg {
 						_ = Disconnect(alias)
@@ -405,15 +406,15 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	switch msg.String() {
 	case "ctrl+c", "q":
-		// If nothing is connected, just quit cleanly.
-		anyConnected := false
-		for _, c := range m.connected {
-			if c {
-				anyConnected = true
+		// If nothing's running, just quit cleanly without prompting.
+		anyActive := false
+		for _, h := range m.hosts {
+			if m.hostActive(h.Alias) {
+				anyActive = true
 				break
 			}
 		}
-		if !anyConnected {
+		if !anyActive {
 			m.saveState()
 			return m, tea.Quit
 		}
@@ -492,7 +493,7 @@ func (m Model) handleHostsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if !ok {
 			return m, nil
 		}
-		if m.connected[sel.Alias] {
+		if m.hostActive(sel.Alias) {
 			return m, disconnectCmd(sel.Alias)
 		}
 		return m, connectCmd(sel.Alias)
