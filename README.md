@@ -78,6 +78,21 @@ so tunnels can be re-established after a restart.
 
 ## Requirements
 
-- An `ssh` binary that supports `ControlMaster` (OpenSSH on macOS / Linux / WSL).
-  On native Windows, ControlMaster is unsupported and `lazyport` will warn.
+- An `ssh` binary on `PATH` (OpenSSH on macOS / Linux / WSL / Windows).
+- Key-based auth (ssh-agent or unencrypted key) — `lazyport` shells out to
+  `ssh` and can't proxy a password prompt through the TUI.
 - Go 1.21+ — only if you're building from source.
+
+### How forwards are managed
+
+On macOS and Linux, `lazyport` uses OpenSSH's
+[ControlMaster](https://man.openbsd.org/ssh_config#ControlMaster) pattern:
+one long-lived `ssh` process per host with a unix-socket control channel,
+through which forwards are added and removed without re-authenticating.
+
+On Windows, where ControlMaster's unix-socket plumbing isn't reliably
+supported, each forward runs as its own `ssh -N -L ...` subprocess instead.
+Same UX, just slightly slower per-forward (one auth per port rather than one
+per host). Set `LAZYPORT_NO_CONTROLMASTER=1` to force this mode on any
+platform — useful if your home directory is on NFS or another filesystem
+where unix sockets misbehave.

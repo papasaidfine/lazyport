@@ -37,8 +37,7 @@ func main() {
 
 	if !SupportsControlMaster() {
 		fmt.Fprintln(os.Stderr,
-			"lazyport: warning — ControlMaster multiplexing is not supported on this OS;\n"+
-				"        port forwards will be added without a long-lived control socket.")
+			"lazyport: using per-forward ssh subprocesses (no ControlMaster on this platform).")
 	}
 
 	m := NewModel(hosts, state)
