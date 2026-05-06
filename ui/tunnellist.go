@@ -130,7 +130,7 @@ func (t TunnelList) Update(msg tea.Msg) (TunnelList, tea.Cmd) {
 
 var (
 	tunnelsPaneStyle = lipgloss.NewStyle().
-				Border(lipgloss.NormalBorder()).
+				Border(lipgloss.RoundedBorder()).
 				BorderForeground(lipgloss.Color("240")).
 				Padding(0, 1)
 	tunnelsPaneFocusStyle = tunnelsPaneStyle.
@@ -161,26 +161,28 @@ var (
 )
 
 func (t TunnelList) View() string {
+	borderColor := lipgloss.Color("240")
+	if t.AnyFocused() {
+		borderColor = lipgloss.Color("205")
+	}
+	borderStyle := lipgloss.NewStyle().Foreground(borderColor)
+
 	style := tunnelsPaneStyle
 	if t.AnyFocused() {
 		style = tunnelsPaneFocusStyle
 	}
-	style = style.Width(t.width).Height(t.height)
+	style = style.BorderTop(false).Width(t.width).Height(t.height - 1)
 
-	var b strings.Builder
 	title := "Tunnels"
 	if t.hostAlias != "" {
 		title = "Tunnels: " + t.hostAlias
-		if !t.connected {
-			title += "  " + hintStyle.Render("(disconnected)")
-		}
 	}
-	b.WriteString(tunnelsTitleStyle.Render(title))
-	b.WriteString("\n\n")
+	header := titleBorder(t.width, title, tunnelsTitleStyle, borderStyle)
 
+	var b strings.Builder
 	if t.hostAlias == "" {
 		b.WriteString(hintStyle.Render("Pick a host on the left, press Enter to connect."))
-		return style.Render(b.String())
+		return header + "\n" + style.Render(b.String())
 	}
 
 	// header
@@ -223,5 +225,5 @@ func (t TunnelList) View() string {
 		b.WriteString(hintStyle.Render("space  pause/resume    d / x  delete    Tab  switch pane"))
 	}
 
-	return style.Render(b.String())
+	return header + "\n" + style.Render(b.String())
 }

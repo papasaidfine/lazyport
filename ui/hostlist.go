@@ -87,7 +87,7 @@ func (h HostList) Update(msg tea.Msg) (HostList, tea.Cmd) {
 
 var (
 	hostsPaneStyle = lipgloss.NewStyle().
-			Border(lipgloss.NormalBorder()).
+			Border(lipgloss.RoundedBorder()).
 			BorderForeground(lipgloss.Color("240")).
 			Padding(0, 1)
 	hostsPaneFocusStyle = hostsPaneStyle.
@@ -110,19 +110,26 @@ var (
 )
 
 func (h HostList) View() string {
+	borderColor := lipgloss.Color("240")
+	if h.focused {
+		borderColor = lipgloss.Color("205")
+	}
+	borderStyle := lipgloss.NewStyle().Foreground(borderColor)
+
+	// Render the box with no top border; we'll prepend our own title-bearing
+	// top so the title sits on the border line itself rather than below it.
 	style := hostsPaneStyle
 	if h.focused {
 		style = hostsPaneFocusStyle
 	}
-	style = style.Width(h.width).Height(h.height)
+	style = style.BorderTop(false).Width(h.width).Height(h.height - 1)
 
 	var b strings.Builder
-	b.WriteString(hostsTitleStyle.Render("Hosts"))
-	b.WriteString("\n\n")
 
 	if len(h.items) == 0 {
 		b.WriteString(hostMutedStyle.Render("(no hosts in ~/.ssh/config)"))
-		return style.Render(b.String())
+		body := style.Render(b.String())
+		return titleBorder(h.width, "Hosts", hostsTitleStyle, borderStyle) + "\n" + body
 	}
 
 	innerW := h.width - 4 // borders + padding
@@ -157,7 +164,8 @@ func (h HostList) View() string {
 		b.WriteString(row)
 		b.WriteByte('\n')
 	}
-	return style.Render(strings.TrimRight(b.String(), "\n"))
+	body := style.Render(strings.TrimRight(b.String(), "\n"))
+	return titleBorder(h.width, "Hosts", hostsTitleStyle, borderStyle) + "\n" + body
 }
 
 func padRight(s string, n int) string {
