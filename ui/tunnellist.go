@@ -9,10 +9,17 @@ import (
 )
 
 // TunnelItem is a row in the right pane: one forwarded port and its status.
+//
+// A row falls into one of three states:
+//   - Active: forward is currently up.
+//   - Stopped: user explicitly toggled it off; can be resumed.
+//   - neither: forward is down for reasons other than the user pausing it
+//     (process died, host disconnected, never spawned). Shown as "down".
 type TunnelItem struct {
-	Port   int
-	Active bool   // ControlMaster reports the forward exists
-	Note   string // optional message (e.g. last error)
+	Port    int
+	Active  bool
+	Stopped bool
+	Note    string // optional message (e.g. last error)
 }
 
 // TunnelList renders the right pane: title, a list of tunnels, and the
@@ -144,8 +151,9 @@ var (
 				Background(lipgloss.Color("57")).
 				Bold(true)
 
-	statusActiveStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
-	statusDownStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("203"))
+	statusActiveStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
+	statusDownStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("203"))
+	statusPausedStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
 
 	delHintStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
 
@@ -184,9 +192,14 @@ func (t TunnelList) View() string {
 		b.WriteByte('\n')
 	} else {
 		for i, it := range t.items {
-			status := statusDownStyle.Render("down  ")
-			if it.Active {
+			var status string
+			switch {
+			case it.Active:
 				status = statusActiveStyle.Render("active")
+			case it.Stopped:
+				status = statusPausedStyle.Render("paused")
+			default:
+				status = statusDownStyle.Render("down  ")
 			}
 			row := fmt.Sprintf("%-7d %s   %s",
 				it.Port, status, delHintStyle.Render("[del]"))
@@ -207,7 +220,7 @@ func (t TunnelList) View() string {
 
 	if t.focusedList && len(t.items) > 0 {
 		b.WriteString("\n")
-		b.WriteString(hintStyle.Render("d / x  delete tunnel    Tab  switch pane"))
+		b.WriteString(hintStyle.Render("space  pause/resume    d / x  delete    Tab  switch pane"))
 	}
 
 	return style.Render(b.String())

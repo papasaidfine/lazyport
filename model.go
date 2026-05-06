@@ -36,6 +36,10 @@ type (
 	disconnectedMsg struct{ alias string; err error }
 	forwardedMsg    struct{ alias string; port int; err error }
 	canceledMsg     struct{ alias string; port int; err error }
+	// stoppedMsg is the toggle-off counterpart of canceledMsg: it kills the
+	// underlying ssh process but keeps the row in the list with Stopped=true,
+	// so the user can resume it later with space.
+	stoppedMsg      struct{ alias string; port int; err error }
 	tickMsg         time.Time
 	statusMsg       struct{ text string; err bool }
 )
@@ -132,8 +136,9 @@ func (m *Model) refreshTunnelList() {
 	items := make([]ui.TunnelItem, 0, len(tunnels))
 	for _, t := range tunnels {
 		items = append(items, ui.TunnelItem{
-			Port:   t.Port,
-			Active: IsForwardActive(sel.Alias, t.Port),
+			Port:    t.Port,
+			Active:  IsForwardActive(sel.Alias, t.Port),
+			Stopped: t.Stopped,
 		})
 	}
 	m.tunnelList.SetItems(items)
@@ -211,21 +216,31 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case connectedMsg:
 		if msg.err != nil {
 			m.setStatus(fmt.Sprintf("connect %s: %v", msg.alias, msg.err), true)
-		} else {
-			m.connected[msg.alias] = true
-			m.setStatus("connected to "+msg.alias, false)
-			// Re-establish any persisted tunnels for this host.
-			for _, t := range m.tunnels[msg.alias] {
-				p := t.Port
-				alias := msg.alias
-				if !m.markPending(alias, p) {
-					continue
-				}
-				return m.afterUpdate(forwardCmd(alias, p))
+			m.refreshHostList()
+			m.refreshTunnelList()
+			return m, nil
+		}
+		m.connected[msg.alias] = true
+		m.setStatus("connected to "+msg.alias, false)
+
+		// Re-establish every persisted tunnel for this host, skipping any the
+		// user explicitly paused. Previously this loop returned on the first
+		// iteration, so only one tunnel was reconnected — fixed by batching.
+		var cmds []tea.Cmd
+		for _, t := range m.tunnels[msg.alias] {
+			if t.Stopped {
+				continue
 			}
+			if !m.markPending(msg.alias, t.Port) {
+				continue
+			}
+			cmds = append(cmds, forwardCmd(msg.alias, t.Port))
 		}
 		m.refreshHostList()
 		m.refreshTunnelList()
+		if len(cmds) > 0 {
+			return m, tea.Batch(cmds...)
+		}
 		return m, nil
 
 	case disconnectedMsg:
@@ -263,6 +278,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.refreshTunnelList()
 		return m, nil
 
+	case stoppedMsg:
+		if msg.err != nil {
+			m.setStatus(fmt.Sprintf("pause %d on %s: %v", msg.port, msg.alias, msg.err), true)
+		} else {
+			m.stopTunnelInList(msg.alias, msg.port)
+			m.setStatus(fmt.Sprintf("paused :%d on %s", msg.port, msg.alias), false)
+			m.saveState()
+		}
+		m.refreshTunnelList()
+		return m, nil
+
 	case statusMsg:
 		m.setStatus(msg.text, msg.err)
 		return m, nil
@@ -273,19 +299,26 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// afterUpdate is a small helper so message handlers can return both a status
-// refresh and a command in one line.
-func (m Model) afterUpdate(cmd tea.Cmd) (tea.Model, tea.Cmd) {
-	return m, cmd
-}
-
 func (m *Model) addTunnel(alias string, port int) {
-	for _, t := range m.tunnels[alias] {
+	for i, t := range m.tunnels[alias] {
 		if t.Port == port {
+			// Re-enable a row the user previously paused — saveState will
+			// pick up the new PID from the backend.
+			m.tunnels[alias][i].Stopped = false
 			return
 		}
 	}
 	m.tunnels[alias] = append(m.tunnels[alias], Tunnel{Port: port})
+}
+
+func (m *Model) stopTunnelInList(alias string, port int) {
+	for i := range m.tunnels[alias] {
+		if m.tunnels[alias][i].Port == port {
+			m.tunnels[alias][i].Stopped = true
+			m.tunnels[alias][i].PID = 0
+			return
+		}
+	}
 }
 
 func (m *Model) removeTunnel(alias string, port int) {
@@ -478,6 +511,23 @@ func (m Model) handleTunnelsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.tunnelList.Blur()
 		m.focus = focusInput
 		return m, m.tunnelList.FocusInput()
+	case " ":
+		// Space toggles a forward on/off without removing it from the list.
+		sel, ok := m.tunnelList.Selected()
+		if !ok {
+			return m, nil
+		}
+		host, hostOk := m.hostList.Selected()
+		if !hostOk {
+			return m, nil
+		}
+		if IsForwardActive(host.Alias, sel.Port) {
+			return m, stopCmd(host.Alias, sel.Port)
+		}
+		if !m.markPending(host.Alias, sel.Port) {
+			return m, nil
+		}
+		return m, forwardCmd(host.Alias, sel.Port)
 	case "d", "x", "delete", "backspace":
 		sel, ok := m.tunnelList.Selected()
 		if !ok {
@@ -578,7 +628,7 @@ func (m Model) helpLine() string {
 	case focusHosts:
 		parts = append(parts, "enter connect/disconnect")
 	case focusTunnels:
-		parts = append(parts, "d delete", "i add port")
+		parts = append(parts, "space pause/resume", "d delete", "i add port")
 	case focusInput:
 		parts = append(parts, "enter forward", "esc back")
 	}
@@ -613,5 +663,15 @@ func cancelCmd(alias string, port int) tea.Cmd {
 	return func() tea.Msg {
 		err := Cancel(alias, port)
 		return canceledMsg{alias: alias, port: port, err: err}
+	}
+}
+
+// stopCmd uses the same Cancel call under the hood as cancelCmd but produces
+// a stoppedMsg, which keeps the row in the list (marked Stopped) instead of
+// deleting it.
+func stopCmd(alias string, port int) tea.Cmd {
+	return func() tea.Msg {
+		err := Cancel(alias, port)
+		return stoppedMsg{alias: alias, port: port, err: err}
 	}
 }

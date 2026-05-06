@@ -17,9 +17,16 @@ import (
 // PID is only meaningful for the procBackend (Windows / forced subprocess
 // mode); it lets us re-adopt the underlying ssh process after lazyport
 // restarts. Always 0 in masterBackend mode.
+//
+// Stopped is set when the user explicitly toggles a forward off via the UI
+// (space). Distinguishing "user paused" from "died unexpectedly" matters in
+// two places: the UI paints them differently, and the auto-reestablish loop
+// on Connect skips paused entries so a stopped forward doesn't pop back up
+// just because its host got reconnected.
 type Tunnel struct {
-	Port int `json:"port"`
-	PID  int `json:"pid,omitempty"`
+	Port    int  `json:"port"`
+	PID     int  `json:"pid,omitempty"`
+	Stopped bool `json:"stopped,omitempty"`
 }
 
 // ResumedForward is what backend.Resume reports for each forward it has
