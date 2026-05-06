@@ -46,10 +46,14 @@ function Get-Arch {
 function Resolve-Version($v) {
     if ($v -ne 'latest') { return $v }
     # /releases/latest excludes prereleases — we want any most-recent release.
+    # GitHub's /releases endpoint returns hits sorted by tag_name *lexically*
+    # (so "v0.1.0-beta.9" sorts above "v0.1.0-beta.11"). Sort the response by
+    # created_at on our side so the user actually gets the newest tag.
     $list = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases" `
                               -Headers @{ 'User-Agent' = "$Bin-installer" }
     if (-not $list -or $list.Count -eq 0) { Die "no releases found in $Repo" }
-    return $list[0].tag_name
+    $newest = $list | Sort-Object -Property created_at -Descending | Select-Object -First 1
+    return $newest.tag_name
 }
 
 function Verify-Sha256($file, $expected) {

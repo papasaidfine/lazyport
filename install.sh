@@ -73,13 +73,35 @@ resolve_version() {
     echo "$v"
     return
   fi
-  # Pull the most recent release (including prereleases). The GitHub
-  # /releases/latest endpoint excludes prereleases, which we don't want yet.
-  # Read the whole response into a variable first so the awk-then-exit pattern
-  # doesn't break the curl pipe under `set -o pipefail`.
+  # Pull the most recent release (including prereleases). The /releases/latest
+  # endpoint excludes prereleases, so we use /releases and pick the newest by
+  # created_at. We do NOT trust the API's array order — GitHub returns hits
+  # sorted lexically by tag_name, which puts "v0.1.0-beta.9" above
+  # "v0.1.0-beta.11". The awk script below pairs each tag_name with the very
+  # next created_at (the release's own, not its assets'), then we sort.
   local body tag
   body="$(http_get_stdout "https://api.github.com/repos/$REPO/releases")"
-  tag="$(printf '%s' "$body" | awk -F'"' '/"tag_name":/ {print $4; exit}')"
+  tag="$(printf '%s' "$body" | awk '
+    /"tag_name":[[:space:]]*"/ {
+      match($0, /"tag_name":[[:space:]]*"[^"]+"/)
+      s = substr($0, RSTART, RLENGTH)
+      sub(/"tag_name":[[:space:]]*"/, "", s)
+      sub(/"$/, "", s)
+      tag = s
+      expecting = 1
+      next
+    }
+    /"created_at":[[:space:]]*"/ {
+      if (expecting) {
+        match($0, /"created_at":[[:space:]]*"[^"]+"/)
+        s = substr($0, RSTART, RLENGTH)
+        sub(/"created_at":[[:space:]]*"/, "", s)
+        sub(/"$/, "", s)
+        printf "%s\t%s\n", s, tag
+        expecting = 0
+      }
+    }
+  ' | sort -r | head -1 | cut -f2-)"
   [[ -n "$tag" ]] || die "could not resolve latest version (is the repo public and has releases?)"
   echo "$tag"
 }
