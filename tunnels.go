@@ -13,8 +13,20 @@ import (
 )
 
 // Tunnel describes a single local→remote port forward attached to a host.
+//
+// PID is only meaningful for the procBackend (Windows / forced subprocess
+// mode); it lets us re-adopt the underlying ssh process after lazyport
+// restarts. Always 0 in masterBackend mode.
 type Tunnel struct {
 	Port int `json:"port"`
+	PID  int `json:"pid,omitempty"`
+}
+
+// ResumedForward is what backend.Resume reports for each forward it has
+// successfully adopted from a prior lazyport run.
+type ResumedForward struct {
+	Alias string
+	Port  int
 }
 
 // backend abstracts how port forwards are realised on a given platform.
@@ -35,6 +47,21 @@ type backend interface {
 	Disconnect(alias string) error
 	Forward(alias string, port int) error
 	Cancel(alias string, port int) error
+
+	// IsForwardActive reports whether a specific (host, port) forward is
+	// currently up. masterBackend collapses to per-host IsConnected;
+	// procBackend tracks per-process state.
+	IsForwardActive(alias string, port int) bool
+
+	// PID returns the OS process ID of the ssh subprocess maintaining the
+	// forward, or 0 if there isn't one (masterBackend, or no such forward).
+	PID(alias string, port int) int
+
+	// Resume scans persisted state and adopts any forwards that are still
+	// alive from a previous lazyport run. Returns the (alias, port) pairs
+	// that were successfully re-tracked. Called once at startup, before the
+	// UI is built.
+	Resume(state *State) []ResumedForward
 }
 
 var activeBackend = pickBackend()
@@ -60,11 +87,14 @@ func SupportsControlMaster() bool {
 
 // Top-level entry points kept stable so callers don't have to know about the
 // interface.
-func IsConnected(alias string) bool        { return activeBackend.IsConnected(alias) }
-func Connect(alias string) error           { return activeBackend.Connect(alias) }
-func Disconnect(alias string) error        { return activeBackend.Disconnect(alias) }
-func Forward(alias string, port int) error { return activeBackend.Forward(alias, port) }
-func Cancel(alias string, port int) error  { return activeBackend.Cancel(alias, port) }
+func IsConnected(alias string) bool                     { return activeBackend.IsConnected(alias) }
+func Connect(alias string) error                        { return activeBackend.Connect(alias) }
+func Disconnect(alias string) error                     { return activeBackend.Disconnect(alias) }
+func Forward(alias string, port int) error              { return activeBackend.Forward(alias, port) }
+func Cancel(alias string, port int) error               { return activeBackend.Cancel(alias, port) }
+func IsForwardActive(alias string, port int) bool       { return activeBackend.IsForwardActive(alias, port) }
+func ForwardPID(alias string, port int) int             { return activeBackend.PID(alias, port) }
+func ResumeFromState(state *State) []ResumedForward     { return activeBackend.Resume(state) }
 
 // ---------------- masterBackend (ControlMaster) ----------------
 
@@ -178,18 +208,51 @@ func (m *masterBackend) Cancel(alias string, port int) error {
 	return nil
 }
 
+// In master mode the ControlMaster is the source of truth: if it's alive then
+// every forward we recorded against it is alive too (ControlPersist=yes keeps
+// per-forward state in the master). Per-forward queries collapse to per-host.
+func (m *masterBackend) IsForwardActive(alias string, _ int) bool {
+	return m.IsConnected(alias)
+}
+
+func (m *masterBackend) PID(_ string, _ int) int { return 0 }
+
+func (m *masterBackend) Resume(state *State) []ResumedForward {
+	if state == nil {
+		return nil
+	}
+	var out []ResumedForward
+	for alias, ts := range state.Hosts {
+		if !m.IsConnected(alias) {
+			continue
+		}
+		for _, t := range ts {
+			out = append(out, ResumedForward{Alias: alias, Port: t.Port})
+		}
+	}
+	return out
+}
+
 // ---------------- procBackend (one ssh per forward) ----------------
+
+// forwardEntry tracks a single live forward. cmd is non-nil for forwards we
+// spawned in this process; nil for forwards we adopted at startup (we only
+// have the PID for those). pid is always populated.
+type forwardEntry struct {
+	cmd *exec.Cmd
+	pid int
+}
 
 type procBackend struct {
 	mu       sync.Mutex
-	intended map[string]bool              // hosts the user has clicked "connect" on
-	procs    map[string]map[int]*exec.Cmd // alias → port → running ssh subprocess
+	intended map[string]bool                   // hosts the user has clicked "connect" on
+	procs    map[string]map[int]*forwardEntry  // alias → port → live forward
 }
 
 func newProcBackend() *procBackend {
 	return &procBackend{
 		intended: map[string]bool{},
-		procs:    map[string]map[int]*exec.Cmd{},
+		procs:    map[string]map[int]*forwardEntry{},
 	}
 }
 
@@ -224,12 +287,27 @@ func (p *procBackend) Disconnect(alias string) error {
 	delete(p.procs, alias)
 	delete(p.intended, alias)
 	p.mu.Unlock()
-	for _, cmd := range procs {
-		if cmd.Process != nil {
-			_ = cmd.Process.Kill()
-		}
+	for _, e := range procs {
+		killEntry(e)
 	}
 	return nil
+}
+
+// killEntry kills the underlying process whether we spawned it (cmd) or
+// adopted it (PID only).
+func killEntry(e *forwardEntry) {
+	if e == nil {
+		return
+	}
+	if e.cmd != nil && e.cmd.Process != nil {
+		_ = e.cmd.Process.Kill()
+		return
+	}
+	if e.pid > 0 {
+		if proc, err := os.FindProcess(e.pid); err == nil {
+			_ = proc.Kill()
+		}
+	}
 }
 
 func (p *procBackend) Forward(alias string, port int) error {
@@ -267,11 +345,13 @@ func (p *procBackend) Forward(alias string, port int) error {
 		// Still alive — assume the forward is up.
 	}
 
+	entry := &forwardEntry{cmd: cmd, pid: cmd.Process.Pid}
+
 	p.mu.Lock()
 	if p.procs[alias] == nil {
-		p.procs[alias] = map[int]*exec.Cmd{}
+		p.procs[alias] = map[int]*forwardEntry{}
 	}
-	p.procs[alias][port] = cmd
+	p.procs[alias][port] = entry
 	p.intended[alias] = true
 	p.mu.Unlock()
 
@@ -282,7 +362,7 @@ func (p *procBackend) Forward(alias string, port int) error {
 		<-done
 		p.mu.Lock()
 		if pp := p.procs[alias]; pp != nil {
-			if cur, ok := pp[port]; ok && cur == cmd {
+			if cur, ok := pp[port]; ok && cur == entry {
 				delete(pp, port)
 			}
 		}
@@ -294,18 +374,122 @@ func (p *procBackend) Forward(alias string, port int) error {
 
 func (p *procBackend) Cancel(alias string, port int) error {
 	p.mu.Lock()
-	var cmd *exec.Cmd
+	var entry *forwardEntry
 	if pp := p.procs[alias]; pp != nil {
-		cmd = pp[port]
+		entry = pp[port]
 		delete(pp, port)
 	}
 	p.mu.Unlock()
-	if cmd == nil {
+	if entry == nil {
 		return fmt.Errorf("no active forward for %s:%d", alias, port)
 	}
-	if cmd.Process != nil {
-		_ = cmd.Process.Kill()
-	}
-	// Cleanup goroutine started in Forward() will pick up cmd.Wait().
+	killEntry(entry)
 	return nil
+}
+
+func (p *procBackend) IsForwardActive(alias string, port int) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if pp := p.procs[alias]; pp != nil {
+		_, ok := pp[port]
+		return ok
+	}
+	return false
+}
+
+func (p *procBackend) PID(alias string, port int) int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if pp := p.procs[alias]; pp != nil {
+		if e := pp[port]; e != nil {
+			return e.pid
+		}
+	}
+	return 0
+}
+
+// Resume re-adopts forwards from the persisted state whose PID is still alive
+// and still belongs to an ssh process. PID-recycle protection: we check the
+// process name matches "ssh" / "ssh.exe" so we don't mistakenly take over an
+// unrelated process that was assigned the same PID after our previous run.
+func (p *procBackend) Resume(state *State) []ResumedForward {
+	if state == nil {
+		return nil
+	}
+	var resumed []ResumedForward
+	for alias, ts := range state.Hosts {
+		anyAdopted := false
+		for _, t := range ts {
+			if t.PID <= 0 || !isSSHProcess(t.PID) {
+				continue
+			}
+			p.mu.Lock()
+			if p.procs[alias] == nil {
+				p.procs[alias] = map[int]*forwardEntry{}
+			}
+			p.procs[alias][t.Port] = &forwardEntry{cmd: nil, pid: t.PID}
+			p.mu.Unlock()
+			resumed = append(resumed, ResumedForward{Alias: alias, Port: t.Port})
+			anyAdopted = true
+		}
+		if anyAdopted {
+			p.mu.Lock()
+			p.intended[alias] = true
+			p.mu.Unlock()
+		}
+	}
+	return resumed
+}
+
+// isSSHProcess reports whether the given PID is currently an ssh process.
+// Uses the per-OS facility for reading a process's image name; treats any
+// failure as "not ssh" so we never adopt something we can't verify.
+func isSSHProcess(pid int) bool {
+	if pid <= 0 {
+		return false
+	}
+	name, ok := processName(pid)
+	if !ok {
+		return false
+	}
+	name = strings.ToLower(name)
+	return name == "ssh" || name == "ssh.exe"
+}
+
+func processName(pid int) (string, bool) {
+	switch runtime.GOOS {
+	case "linux":
+		data, err := os.ReadFile(fmt.Sprintf("/proc/%d/comm", pid))
+		if err != nil {
+			return "", false
+		}
+		return strings.TrimSpace(string(data)), true
+	case "darwin":
+		out, err := exec.Command("ps", "-o", "comm=", "-p", fmt.Sprintf("%d", pid)).Output()
+		if err != nil {
+			return "", false
+		}
+		s := strings.TrimSpace(string(out))
+		if s == "" {
+			return "", false
+		}
+		return filepath.Base(s), true
+	case "windows":
+		out, err := exec.Command("tasklist",
+			"/FI", fmt.Sprintf("PID eq %d", pid),
+			"/NH", "/FO", "CSV").Output()
+		if err != nil {
+			return "", false
+		}
+		s := strings.TrimSpace(string(out))
+		if s == "" || strings.HasPrefix(s, "INFO:") {
+			return "", false
+		}
+		// CSV row: "ssh.exe","12345","Console","1","X K"
+		if idx := strings.Index(s, ","); idx > 0 {
+			return strings.Trim(s[:idx], `"`), true
+		}
+		return "", false
+	}
+	return "", false
 }

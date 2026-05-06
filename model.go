@@ -76,11 +76,24 @@ func NewModel(hosts []Host, state *State) Model {
 		pendingForward: map[string]map[int]bool{},
 	}
 	for _, h := range hosts {
-		m.connected[h.Alias] = IsConnected(h.Alias)
 		if t := state.Get(h.Alias); len(t) > 0 {
 			m.tunnels[h.Alias] = t
 		}
 	}
+
+	// Re-adopt forwards still alive from a previous lazyport run (the
+	// "keep tunnels running in background" path on quit). Backends decide
+	// what "still alive" means: master uses the control socket; proc verifies
+	// the persisted PID is still an ssh process.
+	for _, r := range ResumeFromState(state) {
+		m.connected[r.Alias] = true
+	}
+	for _, h := range hosts {
+		if !m.connected[h.Alias] {
+			m.connected[h.Alias] = IsConnected(h.Alias)
+		}
+	}
+
 	m.refreshHostList()
 	m.refreshTunnelList()
 	m.hostList.Focus()
@@ -118,7 +131,10 @@ func (m *Model) refreshTunnelList() {
 	tunnels := m.tunnels[sel.Alias]
 	items := make([]ui.TunnelItem, 0, len(tunnels))
 	for _, t := range tunnels {
-		items = append(items, ui.TunnelItem{Port: t.Port, Active: connected})
+		items = append(items, ui.TunnelItem{
+			Port:   t.Port,
+			Active: IsForwardActive(sel.Alias, t.Port),
+		})
 	}
 	m.tunnelList.SetItems(items)
 }
@@ -127,8 +143,17 @@ func (m *Model) saveState() {
 	if m.state == nil {
 		return
 	}
+	// Refresh PIDs from the backend on every save so the persisted state can
+	// adopt orphaned ssh processes after a "keep tunnels alive" quit. Master
+	// mode returns 0, which is fine — `omitempty` keeps state.json clean.
 	for alias, ts := range m.tunnels {
-		m.state.Set(alias, ts)
+		updated := make([]Tunnel, len(ts))
+		for i, t := range ts {
+			t.PID = ForwardPID(alias, t.Port)
+			updated[i] = t
+		}
+		m.tunnels[alias] = updated
+		m.state.Set(alias, updated)
 	}
 	if err := m.state.Save(); err != nil {
 		m.setStatus("save state: "+err.Error(), true)
@@ -460,6 +485,17 @@ func (m Model) handleTunnelsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		host, hostOk := m.hostList.Selected()
 		if !hostOk {
+			return m, nil
+		}
+		// If the forward isn't actually live (e.g. it died and we just have
+		// a stale row left over), don't shell out to ssh — that would just
+		// produce a confusing "no active forward" error. Drop the row right
+		// here instead.
+		if !IsForwardActive(host.Alias, sel.Port) {
+			m.removeTunnel(host.Alias, sel.Port)
+			m.saveState()
+			m.refreshTunnelList()
+			m.setStatus(fmt.Sprintf("removed stale :%d on %s", sel.Port, host.Alias), false)
 			return m, nil
 		}
 		return m, cancelCmd(host.Alias, sel.Port)

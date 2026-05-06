@@ -51,3 +51,30 @@ func TestStateSetEmptyDeletes(t *testing.T) {
 		t.Errorf("expected empty Set to remove host entry")
 	}
 }
+
+func TestStatePIDRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("LAZYPORT_CONFIG_DIR", dir)
+
+	s, _ := LoadState()
+	s.Set("rr", []Tunnel{{Port: 3000, PID: 12345}, {Port: 8080, PID: 0}})
+	if err := s.Save(); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	s2, err := LoadState()
+	if err != nil {
+		t.Fatalf("LoadState: %v", err)
+	}
+	got := s2.Get("rr")
+	if len(got) != 2 {
+		t.Fatalf("expected 2 tunnels, got %d", len(got))
+	}
+	// Ports come back sorted.
+	if got[0].Port != 3000 || got[0].PID != 12345 {
+		t.Errorf("first tunnel: got %+v", got[0])
+	}
+	if got[1].Port != 8080 || got[1].PID != 0 {
+		t.Errorf("second tunnel: got %+v", got[1])
+	}
+}
