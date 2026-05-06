@@ -584,7 +584,7 @@ var (
 	statusErrStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("203"))
 	helpStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
 	modalStyle = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
+			Border(lipgloss.NormalBorder()).
 			BorderForeground(lipgloss.Color("205")).
 			Padding(1, 2)
 )

@@ -130,7 +130,7 @@ func (t TunnelList) Update(msg tea.Msg) (TunnelList, tea.Cmd) {
 
 var (
 	tunnelsPaneStyle = lipgloss.NewStyle().
-				Border(lipgloss.RoundedBorder()).
+				Border(lipgloss.NormalBorder()).
 				BorderForeground(lipgloss.Color("240")).
 				Padding(0, 1)
 	tunnelsPaneFocusStyle = tunnelsPaneStyle.

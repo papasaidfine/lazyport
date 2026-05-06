@@ -91,7 +91,7 @@ func (p PortInput) Update(msg tea.Msg) (PortInput, tea.Cmd) {
 var (
 	portLabelStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
 	portBoxStyle   = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
+			Border(lipgloss.NormalBorder()).
 			BorderForeground(lipgloss.Color("240")).
 			Padding(0, 1)
 	portBoxFocusStyle = portBoxStyle.

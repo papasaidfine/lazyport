@@ -87,7 +87,7 @@ func (h HostList) Update(msg tea.Msg) (HostList, tea.Cmd) {
 
 var (
 	hostsPaneStyle = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
+			Border(lipgloss.NormalBorder()).
 			BorderForeground(lipgloss.Color("240")).
 			Padding(0, 1)
 	hostsPaneFocusStyle = hostsPaneStyle.
