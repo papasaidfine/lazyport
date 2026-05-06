@@ -131,39 +131,39 @@ func (t TunnelList) Update(msg tea.Msg) (TunnelList, tea.Cmd) {
 var (
 	tunnelsPaneStyle = lipgloss.NewStyle().
 				Border(lipgloss.RoundedBorder()).
-				BorderForeground(lipgloss.Color("240")).
+				BorderForeground(colorBorder).
 				Padding(0, 1)
 	tunnelsPaneFocusStyle = tunnelsPaneStyle.
-				BorderForeground(lipgloss.Color("205"))
+				BorderForeground(colorBorderFocused)
 
 	tunnelsTitleStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("205")).
+				Foreground(colorTitle).
 				Bold(true)
 
 	tableHeaderStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("244")).
+				Foreground(colorTextMuted).
 				Underline(true)
 
-	tunnelRowStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("252"))
+	tunnelRowStyle = lipgloss.NewStyle().Foreground(colorText)
 
 	tunnelRowSelectedStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("230")).
-				Background(lipgloss.Color("57")).
+				Foreground(colorTextSelected).
+				Background(colorBgSelected).
 				Bold(true)
 
-	statusActiveStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
-	statusDownStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("203"))
-	statusPausedStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
+	statusActiveStyle = lipgloss.NewStyle().Foreground(colorStatusActive)
+	statusDownStyle   = lipgloss.NewStyle().Foreground(colorStatusDown)
+	statusPausedStyle = lipgloss.NewStyle().Foreground(colorStatusPaused)
 
-	delHintStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
+	delHintStyle = lipgloss.NewStyle().Foreground(colorTextMuted)
 
-	hintStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
+	hintStyle = lipgloss.NewStyle().Foreground(colorTextMuted)
 )
 
 func (t TunnelList) View() string {
-	borderColor := lipgloss.Color("240")
+	borderColor := colorBorder
 	if t.AnyFocused() {
-		borderColor = lipgloss.Color("205")
+		borderColor = colorBorderFocused
 	}
 	borderStyle := lipgloss.NewStyle().Foreground(borderColor)
 

@@ -88,31 +88,31 @@ func (h HostList) Update(msg tea.Msg) (HostList, tea.Cmd) {
 var (
 	hostsPaneStyle = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("240")).
+			BorderForeground(colorBorder).
 			Padding(0, 1)
 	hostsPaneFocusStyle = hostsPaneStyle.
-				BorderForeground(lipgloss.Color("205"))
+				BorderForeground(colorBorderFocused)
 
 	hostsTitleStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("205")).
+			Foreground(colorTitle).
 			Bold(true)
 
 	hostRowSelectedStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("230")).
-				Background(lipgloss.Color("57")).
+				Foreground(colorTextSelected).
+				Background(colorBgSelected).
 				Bold(true)
 
 	hostRowStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("252"))
+			Foreground(colorText)
 
 	hostMutedStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("244"))
+			Foreground(colorTextMuted)
 )
 
 func (h HostList) View() string {
-	borderColor := lipgloss.Color("240")
+	borderColor := colorBorder
 	if h.focused {
-		borderColor = lipgloss.Color("205")
+		borderColor = colorBorderFocused
 	}
 	borderStyle := lipgloss.NewStyle().Foreground(borderColor)
 
@@ -144,7 +144,7 @@ func (h HostList) View() string {
 		dotStyle := hostMutedStyle
 		if it.Connected {
 			dot = "●"
-			dotStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
+			dotStyle = lipgloss.NewStyle().Foreground(colorStatusActive)
 		}
 		marker := "  "
 		if i == h.cursor {

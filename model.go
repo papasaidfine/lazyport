@@ -580,12 +580,12 @@ func (m *Model) layout() {
 }
 
 var (
-	statusOKStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
-	statusErrStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("203"))
-	helpStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
-	modalStyle = lipgloss.NewStyle().
+	statusOKStyle  = lipgloss.NewStyle().Foreground(ui.ColorStatusActive)
+	statusErrStyle = lipgloss.NewStyle().Foreground(ui.ColorStatusDown)
+	helpStyle      = lipgloss.NewStyle().Foreground(ui.ColorTextMuted)
+	modalStyle     = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("205")).
+			BorderForeground(ui.ColorBorderFocused).
 			Padding(1, 2)
 )
 
