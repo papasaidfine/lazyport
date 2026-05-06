@@ -50,7 +50,9 @@ snapshot:
 
 changelog:
   sort: asc
-  use: github
+  # `git` use mode renders only "* <hash> <message>", with no committer email —
+  # `github` mode would include "(name <email>)" which can leak private addresses.
+  use: git
   groups:
     - title: Features
       regexp: "^.*feat[(\\w)]*:+.*$"
