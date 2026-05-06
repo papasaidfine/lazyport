@@ -103,11 +103,12 @@ func (p PortInput) View() string {
 	if p.focused {
 		box = portBoxFocusStyle
 	}
-	hint := portLabelStyle.Render("press Enter to forward")
+	// The "press Enter to forward" hint used to live on this line, but it
+	// overflowed past SetWidth's budget and bled into the box. The bottom
+	// help bar already shows `enter forward · esc back` when this pane has
+	// focus, so the inline hint was redundant.
 	return lipgloss.JoinHorizontal(lipgloss.Center,
 		portLabelStyle.Render("Add port: "),
 		box.Render(p.ti.View()),
-		"  ",
-		hint,
 	)
 }
