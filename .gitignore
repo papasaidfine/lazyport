@@ -1,0 +1,17 @@
+# Compiled binary
+/sshfwd
+/sshfwd.exe
+
+# Test / coverage output
+*.test
+*.out
+coverage.*
+
+# GoReleaser artifacts
+/dist/
+
+# Editor / OS junk
+.idea/
+.vscode/
+.DS_Store
+*.swp
