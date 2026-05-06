@@ -122,7 +122,9 @@ func (h HostList) View() string {
 	if h.focused {
 		style = hostsPaneFocusStyle
 	}
-	style = style.BorderTop(false).Width(h.width).Height(h.height - 1)
+	// Height in lipgloss is content rows; borders are added on top. We render
+	// 1 manual top + N content + 1 bottom = N + 2 = h.height rows.
+	style = style.BorderTop(false).Width(h.width).Height(h.height - 2)
 
 	var b strings.Builder
 

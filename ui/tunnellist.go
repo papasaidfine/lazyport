@@ -171,7 +171,9 @@ func (t TunnelList) View() string {
 	if t.AnyFocused() {
 		style = tunnelsPaneFocusStyle
 	}
-	style = style.BorderTop(false).Width(t.width).Height(t.height - 1)
+	// Height in lipgloss is content rows; borders are added on top. We render
+	// 1 manual top + N content + 1 bottom = N + 2 = t.height rows.
+	style = style.BorderTop(false).Width(t.width).Height(t.height - 2)
 
 	title := "Tunnels"
 	if t.hostAlias != "" {

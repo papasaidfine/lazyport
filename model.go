@@ -611,8 +611,11 @@ func (m Model) View() string {
 }
 
 func (m Model) statusLine() string {
+	// Always render a row, even when there's nothing to say — keeps the
+	// vertical layout (panes + status + help) at exactly m.height regardless
+	// of whether a status message is set.
 	if m.statusText == "" {
-		return ""
+		return " "
 	}
 	if m.statusIsErr {
 		return statusErrStyle.Render("✖ " + m.statusText)
