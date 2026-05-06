@@ -16,15 +16,33 @@ tab/←→ pane  ·  ↑↓ navigate  ·  enter connect/disconnect  ·  q quit
 
 ## Install
 
+**Linux / macOS** — one-liner that downloads the right binary, verifies its
+SHA-256, and drops it into `/usr/local/bin` (falls back to `~/.local/bin` if
+that's not writable):
+
 ```sh
-go install github.com/papasaidfine/lazyport@latest
+curl -fsSL https://raw.githubusercontent.com/papasaidfine/lazyport/main/install.sh | bash
 ```
 
-Or build from source:
+**Windows** (PowerShell 5.1+):
+
+```powershell
+irm https://raw.githubusercontent.com/papasaidfine/lazyport/main/install.ps1 | iex
+```
+
+Override `INSTALL_DIR` (or `$env:INSTALL_DIR`) to install elsewhere. Override
+`VERSION` (or `$env:VERSION`) to pin a specific tag, e.g. `VERSION=v0.1.0-beta.1`.
+
+You can also grab a tarball / zip directly from the
+[Releases page](https://github.com/papasaidfine/lazyport/releases) and put the
+binary on your `PATH` yourself.
+
+### From source
 
 ```sh
-git clone <this repo> && cd lazyport
-go build -o lazyport .
+go install github.com/papasaidfine/lazyport@latest
+# or
+git clone https://github.com/papasaidfine/lazyport && cd lazyport && go build -o lazyport .
 ```
 
 ## Run
@@ -60,6 +78,6 @@ so tunnels can be re-established after a restart.
 
 ## Requirements
 
-- Go 1.21+
 - An `ssh` binary that supports `ControlMaster` (OpenSSH on macOS / Linux / WSL).
   On native Windows, ControlMaster is unsupported and `lazyport` will warn.
+- Go 1.21+ — only if you're building from source.
