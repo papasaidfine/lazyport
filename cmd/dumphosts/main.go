@@ -1,5 +1,5 @@
 // dumphosts is a tiny dev helper: prints what ListHosts() would return.
-// Run with:  SSHFWD_SSH_CONFIG=/path/to/config go run ./cmd/dumphosts
+// Run with:  LAZYPORT_SSH_CONFIG=/path/to/config go run ./cmd/dumphosts
 package main
 
 import (
@@ -20,7 +20,7 @@ type host struct {
 }
 
 func main() {
-	path := os.Getenv("SSHFWD_SSH_CONFIG")
+	path := os.Getenv("LAZYPORT_SSH_CONFIG")
 	if path == "" {
 		home, _ := os.UserHomeDir()
 		path = filepath.Join(home, ".ssh", "config")

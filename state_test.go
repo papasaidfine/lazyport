@@ -9,7 +9,7 @@ import (
 
 func TestStateRoundTrip(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("SSHFWD_CONFIG_DIR", dir)
+	t.Setenv("LAZYPORT_CONFIG_DIR", dir)
 
 	s, err := LoadState()
 	if err != nil {

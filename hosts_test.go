@@ -29,7 +29,7 @@ Host *
 	if err := os.WriteFile(path, []byte(cfg), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("SSHFWD_SSH_CONFIG", path)
+	t.Setenv("LAZYPORT_SSH_CONFIG", path)
 
 	hosts, err := ListHosts()
 	if err != nil {
@@ -61,7 +61,7 @@ Host *
 }
 
 func TestListHostsMissingFile(t *testing.T) {
-	t.Setenv("SSHFWD_SSH_CONFIG", filepath.Join(t.TempDir(), "does-not-exist"))
+	t.Setenv("LAZYPORT_SSH_CONFIG", filepath.Join(t.TempDir(), "does-not-exist"))
 	hosts, err := ListHosts()
 	if err != nil {
 		t.Fatalf("expected no error for missing file, got %v", err)

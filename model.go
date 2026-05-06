@@ -8,7 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/lchen/sshfwd/ui"
+	"github.com/papasaidfine/lazyport/ui"
 )
 
 // focusZone is which pane currently owns input.
@@ -40,7 +40,7 @@ type (
 	statusMsg       struct{ text string; err bool }
 )
 
-// Model is the top-level bubbletea model for sshfwd.
+// Model is the top-level bubbletea model for lazyport.
 type Model struct {
 	hosts     []Host
 	connected map[string]bool

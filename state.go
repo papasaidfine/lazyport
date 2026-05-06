@@ -12,15 +12,15 @@ import (
 )
 
 // State is the on-disk record of which tunnels were active per host the last
-// time sshfwd was running. We use it to offer reconnection on startup.
+// time lazyport was running. We use it to offer reconnection on startup.
 type State struct {
 	Hosts map[string][]Tunnel `json:"hosts"`
 }
 
-// configDir returns the platform-appropriate sshfwd config directory.
+// configDir returns the platform-appropriate lazyport config directory.
 // It does NOT create the directory.
 func configDir() (string, error) {
-	if p := os.Getenv("SSHFWD_CONFIG_DIR"); p != "" {
+	if p := os.Getenv("LAZYPORT_CONFIG_DIR"); p != "" {
 		return p, nil
 	}
 	if runtime.GOOS == "windows" {
@@ -32,17 +32,17 @@ func configDir() (string, error) {
 			}
 			base = filepath.Join(home, "AppData", "Roaming")
 		}
-		return filepath.Join(base, "sshfwd"), nil
+		return filepath.Join(base, "lazyport"), nil
 	}
 	// XDG-friendly default on unix-likes.
 	if xdg := os.Getenv("XDG_CONFIG_HOME"); xdg != "" {
-		return filepath.Join(xdg, "sshfwd"), nil
+		return filepath.Join(xdg, "lazyport"), nil
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, ".config", "sshfwd"), nil
+	return filepath.Join(home, ".config", "lazyport"), nil
 }
 
 func statePath() (string, error) {

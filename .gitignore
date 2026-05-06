@@ -1,6 +1,6 @@
 # Compiled binary
-/sshfwd
-/sshfwd.exe
+/lazyport
+/lazyport.exe
 
 # Test / coverage output
 *.test

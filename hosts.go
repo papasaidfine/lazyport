@@ -76,7 +76,7 @@ func ListHosts() ([]Host, error) {
 }
 
 func defaultSSHConfigPath() (string, error) {
-	if p := os.Getenv("SSHFWD_SSH_CONFIG"); p != "" {
+	if p := os.Getenv("LAZYPORT_SSH_CONFIG"); p != "" {
 		return p, nil
 	}
 	home, err := os.UserHomeDir()

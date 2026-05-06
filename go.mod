@@ -1,4 +1,4 @@
-module github.com/lchen/sshfwd
+module github.com/papasaidfine/lazyport
 
 go 1.26.2
 
