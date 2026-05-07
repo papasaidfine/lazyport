@@ -35,3 +35,7 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # When two tags point at the same commit (e.g. tagging v0.1.0 right
+          # on top of v0.1.0-beta.N), GoReleaser's auto tag detection can pick
+          # the wrong one. Pin it to whichever tag actually triggered this run.
+          GORELEASER_CURRENT_TAG: ${{ github.ref_name }}
