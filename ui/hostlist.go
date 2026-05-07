@@ -112,16 +112,18 @@ func (h HostList) View() string {
 
 	// Render the box with no top border; we'll prepend our own title-bearing
 	// top so the title sits on the border line itself rather than below it.
-	// Height in lipgloss is content rows; borders are added on top. We render
-	// 1 manual top + N content + 1 bottom = N + 2 = h.height rows.
-	style := paneStyle.BorderTop(false).Width(h.width).Height(h.height - 2)
+	// lipgloss adds the L/R borders *on top of* Width() and the bottom border
+	// on top of Height(), so we shrink both by 2 to land at exactly the
+	// visible h.width × h.height the layout asked for.
+	padded := h.width - 2
+	style := paneStyle.BorderTop(false).Width(padded).Height(h.height - 2)
 
 	var b strings.Builder
 
 	if len(h.items) == 0 {
 		b.WriteString(mutedStyle.Render("(no hosts in ~/.ssh/config)"))
 		body := style.Render(b.String())
-		return titleBorder(h.width, "Hosts", titleStyle, borderStyle) + "\n" + body
+		return titleBorder(padded, "Hosts", titleStyle, borderStyle) + "\n" + body
 	}
 
 	innerW := h.width - 4 // borders + padding
@@ -157,7 +159,7 @@ func (h HostList) View() string {
 		b.WriteByte('\n')
 	}
 	body := style.Render(strings.TrimRight(b.String(), "\n"))
-	return titleBorder(h.width, "Hosts", titleStyle, borderStyle) + "\n" + body
+	return titleBorder(padded, "Hosts", titleStyle, borderStyle) + "\n" + body
 }
 
 func padRight(s string, n int) string {

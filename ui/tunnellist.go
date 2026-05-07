@@ -155,15 +155,17 @@ func (t TunnelList) View() string {
 	}
 	borderStyle := lipgloss.NewStyle().Foreground(borderColor)
 
-	// Height in lipgloss is content rows; borders are added on top. We render
-	// 1 manual top + N content + 1 bottom = N + 2 = t.height rows.
-	style := paneStyle.BorderTop(false).Width(t.width).Height(t.height - 2)
+	// lipgloss adds the L/R borders *on top of* Width() and the bottom border
+	// on top of Height(), so we shrink both by 2 to land at exactly the
+	// visible t.width × t.height the layout asked for.
+	padded := t.width - 2
+	style := paneStyle.BorderTop(false).Width(padded).Height(t.height - 2)
 
 	title := "Tunnels"
 	if t.hostAlias != "" {
 		title = "Tunnels: " + t.hostAlias
 	}
-	header := titleBorder(t.width, title, titleStyle, borderStyle)
+	header := titleBorder(padded, title, titleStyle, borderStyle)
 
 	var b strings.Builder
 	if t.hostAlias == "" {
